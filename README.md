@@ -11,7 +11,7 @@
 | EMAIL              | ❌ 可选  | 用于通知使用的Email,可随意填写                          |
 | SESSION_TOKEN      | ✅ 必填  | Bot-hosting session_token，cookie里获取               |
 | GH_TOKEN           | ✅ 必填  | GitHub(classic) toekn,用于自动更新session_token,以ghp_xxx开头|
-| NODE_LINK          | ❌ 可选  | 代理链接（需包含协议，如 vless:// vmess:// trojan:// hysteria2:// tuic:// anytls:// socks5:// )|
+| NODE_LINK          | ❌ 可选  | 完整代理链接（如 vless:// vmess:// trojan:// hysteria2:// tuic:// anytls:// socks5:// )|
 | TG_BOT_TOKEN       | ❌ 可选  | Telegram Bot Token（用于发送通知）                      |
 | TG_CHAT_ID         | ❌ 可选  | Telegram Chat ID（接收通知的用户或群组 ID）               |
 
