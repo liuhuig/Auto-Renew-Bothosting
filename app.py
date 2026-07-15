@@ -6,6 +6,9 @@ import urllib.request, urllib.parse, urllib.error
 from datetime import datetime
 from seleniumbase import SB
 
+# 强制 Python 实时刷新日志输出 (防止 GitHub Actions 吞噬日志)
+sys.stdout.reconfigure(line_buffering=True)
+
 # 环境变量配置(可以直接私库在双引号里填写)
 EMAIL         = os.environ.get("EMAIL") or ""           # 邮箱,只用于通知使用，可随意填写
 SESSION_TOKEN = os.environ.get("SESSION_TOKEN") or ""   # session token，默认登录方式,非必须
@@ -192,9 +195,8 @@ def extract_expiry_date(page_source: str) -> str:
             return date_str
     return None
 
-
 # ==============================================================
-#   Discord OAuth 登录逻辑 (修改了智能等待机制，避免因CF拦截被误判跳过)
+#   Discord OAuth 登录逻辑
 # ==============================================================
 DISCORD_CLIENT_ID   = "884382422530158623"
 OAUTH_REDIRECT_URI  = "https://bot-hosting.net/login"
@@ -212,6 +214,15 @@ def capture_discord_state(sb) -> str:
     print("🔎 获取 Discord OAuth state...")
     sb.uc_open_with_reconnect("https://bot-hosting.net/login/discord", reconnect_time=4)
     
+    print("🔒 检测是否遇到 CF 验证盾...")
+    if not wait_for_turnstile_pass(sb, timeout=10):
+        print("⚠️ 尝试自动点击 CF 盾验证...")
+        try:
+            sb.uc_gui_click_captcha()
+            time.sleep(5)
+        except:
+            pass
+
     print("⏳ 等待页面跳转至 Discord (最多等待 25 秒以防CF拦截)...")
     for i in range(25):
         url = sb.get_current_url()
@@ -328,7 +339,6 @@ def do_discord_login(sb) -> bool:
             sb.save_screenshot("login_banned.png")
             return False
             
-        # 只要成功跳回 bot-hosting 且不在 login 页面，即可认为成功
         if "bot-hosting.net" in url and path != "/login" and not path.startswith("/login/discord"):
             print(f"✅ 第 {i+1} 秒成功完成 OAuth 登录！进入页面：{url}")
             return True
@@ -354,6 +364,10 @@ def main():
     print("#" * 25)
     print("   Bot-hosting 自动续期")
     print("#" * 25)
+    
+    print(f"\n🔍 环境变量配置检测:")
+    print(f" -> DISCORD_TOKEN: {'✅ 已读取到' if DC_TOKEN else '❌ 未读取到 (将跳过Discord登录)'}")
+    print(f" -> SESSION_TOKEN: {'✅ 已读取到' if SESSION_TOKEN else '❌ 未读取到'}")
 
     IS_PROXY = os.environ.get("IS_PROXY", "false").lower() == "true"
     PROXY_SERVER = os.environ.get("PROXY_SERVER", "").strip() or "http://127.0.0.1:1080"
@@ -398,6 +412,8 @@ def main():
                     print(f"❌ Discord OAuth 登录后仍未到达账单页，当前URL: {current_url}")
             else:
                 print("❌ Discord OAuth 登录流程未完成。")
+        else:
+            print("\n⚠️ 警告: DC_TOKEN 为空，直接跳过 Discord 登录流程！")
 
         # 方式2: SESSION_TOKEN Cookie 登录（备用）
         if not login_ok and SESSION_TOKEN:
