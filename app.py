@@ -192,7 +192,10 @@ def extract_expiry_date(page_source: str) -> str:
             return date_str
     return None
 
-#   Discord OAuth 登录（SESSION_TOKEN 失效时的备用方案）
+
+# ==============================================================
+#   Discord OAuth 登录逻辑 (修改了智能等待机制，避免因CF拦截被误判跳过)
+# ==============================================================
 DISCORD_CLIENT_ID   = "884382422530158623"
 OAUTH_REDIRECT_URI  = "https://bot-hosting.net/login"
 OAUTH_SCOPE         = "identify email guilds"
@@ -208,11 +211,22 @@ STATE_RE = re.compile(r"[?&]state=([^&]+)")
 def capture_discord_state(sb) -> str:
     print("🔎 获取 Discord OAuth state...")
     sb.uc_open_with_reconnect("https://bot-hosting.net/login/discord", reconnect_time=4)
-    time.sleep(2)
-    url = sb.get_current_url()
     
+    print("⏳ 等待页面跳转至 Discord (最多等待 25 秒以防CF拦截)...")
+    for i in range(25):
+        url = sb.get_current_url()
+        if "discord.com" in url:
+            print(f"✅ 第 {i+1} 秒成功捕获到跳转！")
+            break
+        time.sleep(1)
+        
+    url = sb.get_current_url()
     if "discord.com" not in url:
         print(f"⚠️ 未跳转到 Discord 相关页面，当前 URL：{url}")
+        try:
+            print(f"📄 当前网页标题：{sb.get_title()}")
+        except:
+            pass
         return ""
         
     m = STATE_RE.search(url)
@@ -221,7 +235,7 @@ def capture_discord_state(sb) -> str:
         return ""
         
     state = urllib.parse.unquote(m.group(1))
-    print(f"✅ 已捕获 state（当前落地页：{urllib.parse.urlparse(url).path}）")
+    print(f"✅ 成功提取 state 密钥")
     return state
 
 def discord_authorize(state: str) -> str:
@@ -288,64 +302,54 @@ def discord_authorize(state: str) -> str:
         return ""
         
     masked = re.sub(r"code=[^&]+", "code=***", location)
-    print(f"✅ 拿到回调 URL: {masked}")
+    print(f"✅ 成功拿到回调 URL: {masked}")
     return location
 
 def do_discord_login(sb) -> bool:
-    print("\n🔑 通过 Discord Token 登录...")
+    print("\n🔑 开始执行 Discord Token 模拟授权...")
     state = capture_discord_state(sb)
     if not state:
-        sb.save_screenshot("login_no_state.png")
         return False
         
     location = discord_authorize(state)
     if not location:
         return False
         
-    print("↩️ 携带授权码打开回调链接...")
+    print("↩️ 携带授权码请求回调链接...")
     sb.uc_open_with_reconnect(location, reconnect_time=4)
-    time.sleep(3)
     
-    url = sb.get_current_url()
-    if "/error/banned" in url:
-        print("🚫 账号已被封禁")
-        sb.save_screenshot("login_banned.png")
-        return False
-    if "bot-hosting.net" not in url:
-        print(f"❌ 回调后未跳转至 bot-hosting.net，当前 URL：{url}")
-        sb.save_screenshot("login_no_redirect.png")
-        return False
-        
-    try:
-        body_text = sb.get_text("body")
-    except Exception:
-        body_text = ""
-        
-    if "fraud" in body_text.lower():
-        print("🚫 触发风控（fraud attempt），可能是 IP 被拦截")
-        sb.save_screenshot("login_fraud.png")
-        return False
-        
-    for _ in range(30):
+    print("⏳ 等待 Bot-hosting 完成授权登录 (最多检测 30 秒)...")
+    for i in range(30):
         url = sb.get_current_url()
         path = urllib.parse.urlparse(url).path
         
+        if "/error/banned" in url:
+            print("🚫 账号已被封禁")
+            sb.save_screenshot("login_banned.png")
+            return False
+            
+        # 只要成功跳回 bot-hosting 且不在 login 页面，即可认为成功
         if "bot-hosting.net" in url and path != "/login" and not path.startswith("/login/discord"):
-            print(f"✅ Discord OAuth 登录成功！当前页面：{url}")
+            print(f"✅ 第 {i+1} 秒成功完成 OAuth 登录！进入页面：{url}")
             return True
             
-        time.sleep(0.5)
+        time.sleep(1)
         
+    url = sb.get_current_url()
     print(f"❌ 登录超时或未跳转成功，最终停留在：{url}")
     try:
         body_text = sb.get_text("body")
+        if "fraud" in body_text.lower():
+            print("🚫 触发风控（fraud attempt），可能是 IP 被拦截")
         print(f"📄 页面正文片段：{body_text[:200].strip()!r}")
     except Exception:
         pass
     sb.save_screenshot("login_timeout.png")
     return False
 
-# 主流程
+# ==============================================================
+#   主流程
+# ==============================================================
 def main():
     print("#" * 25)
     print("   Bot-hosting 自动续期")
@@ -393,12 +397,12 @@ def main():
                 else:
                     print(f"❌ Discord OAuth 登录后仍未到达账单页，当前URL: {current_url}")
             else:
-                print("❌ Discord OAuth 登录失败")
+                print("❌ Discord OAuth 登录流程未完成。")
 
         # 方式2: SESSION_TOKEN Cookie 登录（备用）
         if not login_ok and SESSION_TOKEN:
             _LOGIN_METHOD = "SESSION_TOKEN"
-            print("\n🚀 Discord登录失败或未配置，退回尝试 SESSION_TOKEN 登录...")
+            print("\n🚀 退回尝试 SESSION_TOKEN 登录...")
             sb.open("https://bot-hosting.net/")
             sb.wait_for_ready_state_complete()
             sb.sleep(2)
