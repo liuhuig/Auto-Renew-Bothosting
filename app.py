@@ -368,47 +368,22 @@ def main():
         except Exception as e:
             print(f"⚠️ 获取出口 IP 失败: {e}")
 
-        login_ok = False
+      login_ok = False
 
-        # 方式1: SESSION_TOKEN Cookie 登录（默认）
-        if SESSION_TOKEN:
-            print("🚀 启动浏览器...")
-            sb.open("https://bot-hosting.net/")
-            sb.wait_for_ready_state_complete()
-            sb.sleep(2)
-
-            print("📝 注入 Cookie...")
-            for name, value in COOKIES.items():
-                if value:
-                    sb.add_cookie({"name": name, "value": value, "domain": "bot-hosting.net"})
-
-            print("🌐 访问 https://bot-hosting.net/a/billings ...")
-            sb.open("https://bot-hosting.net/a/billings")
-            sb.wait_for_ready_state_complete()
-            sb.sleep(3)
-            current_url = sb.get_current_url()
-            current_title = sb.get_title()
-            print(f"📝 当前URL: {current_url}, Title: {current_title}")
-
-            if "a/billings" in current_url and "login" not in current_url:
-                login_ok = True
-                print("✅ SESSION_TOKEN 登录成功,当前已到达账单页")
-            else:
-                print(f"❌ SESSION_TOKEN 登录失败，当前标题: {current_title}")
-
-        # 方式2: Discord OAuth 登录（备用）
-        if not login_ok and DC_TOKEN:
+        # 方式1: Discord OAuth 登录（优先）
+        if DC_TOKEN:
             _LOGIN_METHOD = "Discord Token"
-            print("\n🔄 SESSION_TOKEN 登录失败或未配置，尝试 Discord OAuth 登录...")
+            print("\n🔄 优先尝试 Discord OAuth 登录...")
             if do_discord_login(sb):
                 print("🌐 访问 https://bot-hosting.net/a/billings ...")
                 sb.open("https://bot-hosting.net/a/billings")
                 sb.wait_for_ready_state_complete()
                 sb.sleep(3)
+                
                 current_url = sb.get_current_url()
                 current_title = sb.get_title()
                 print(f"📝 当前URL: {current_url}, Title: {current_title}")
-
+                
                 if "a/billings" in current_url and "login" not in current_url:
                     login_ok = True
                     print("✅ Discord OAuth 登录成功,当前已到达账单页")
@@ -416,6 +391,34 @@ def main():
                     print(f"❌ Discord OAuth 登录后仍未到达账单页，当前URL: {current_url}")
             else:
                 print("❌ Discord OAuth 登录失败")
+
+        # 方式2: SESSION_TOKEN Cookie 登录（备用）
+        if not login_ok and SESSION_TOKEN:
+            _LOGIN_METHOD = "SESSION_TOKEN"
+            print("\n🚀 Discord登录失败或未配置，退回尝试 SESSION_TOKEN 登录...")
+            sb.open("https://bot-hosting.net/")
+            sb.wait_for_ready_state_complete()
+            sb.sleep(2)
+            
+            print("📝 注入 Cookie...")
+            for name, value in COOKIES.items():
+                if value:
+                    sb.add_cookie({"name": name, "value": value, "domain": "bot-hosting.net"})
+                    
+            print("🌐 访问 https://bot-hosting.net/a/billings ...")
+            sb.open("https://bot-hosting.net/a/billings")
+            sb.wait_for_ready_state_complete()
+            sb.sleep(3)
+            
+            current_url = sb.get_current_url()
+            current_title = sb.get_title()
+            print(f"📝 当前URL: {current_url}, Title: {current_title}")
+            
+            if "a/billings" in current_url and "login" not in current_url:
+                login_ok = True
+                print("✅ SESSION_TOKEN 登录成功,当前已到达账单页")
+            else:
+                print(f"❌ SESSION_TOKEN 登录失败，当前标题: {current_title}")
 
         if not login_ok:
             error_msg = "Cookie 已失效或页面异常"
