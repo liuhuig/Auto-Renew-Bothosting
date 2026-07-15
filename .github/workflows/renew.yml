@@ -28,6 +28,7 @@ jobs:
           seleniumbase install chromedriver
 
       - name: ⚙ 设置代理 (sing-box)
+        continue-on-error: true
         env:
           NODE_LINK: ${{ secrets.NODE_LINK }}
         run: |
