@@ -313,15 +313,19 @@ def normalize_date(date_str: str) -> str:
 DATE_RE = r"(\d{4}/\d{1,2}/\d{1,2}|\d{1,2}/\d{1,2}/\d{4})"
 
 # 获取过期日期
+DATE_RE = r"(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}|\d{1,2}/\d{1,2}/\d{4}|\d{4}-\d{2}-\d{2})"
 def extract_expiry_date(page_source: str) -> str:
     patterns = [
-        r"[Ee]xpires\s*[:\-]?\s*" + DATE_RE,   # Expires 10/24/2026. Renew manually to extend it for 4 days.
-        DATE_RE,                                # 兜底: 账单页纯文本中通常只有到期日期
+        r"[Ee]xpires\s*[:\-]?\s*" + DATE_RE,   # 优先匹配包含 "Expires" 的
+        DATE_RE,                                # 兜底匹配
     ]
+    
     for pattern in patterns:
         match = re.search(pattern, page_source)
         if match:
+            # match.group(1) 现在能准确拿到完整的日期字符串
             return normalize_date(match.group(1))
+            
     return None
 
 # 优先从 DOM 的 st-meta 元素提取到期日期 (不依赖页面语言)
@@ -396,14 +400,14 @@ def main():
                 print("🖱️ 提交登录按钮")
                 sb.sleep(6)  # 等待页面加载
                 sb.wait_for_ready_state_complete()
-                sb.open(f"{BASE_URL}/a/billings")
+                sb.open(f"{BASE_URL}/dash/billings")
                 sb.wait_for_ready_state_complete()
                 sb.sleep(3)
                 current_url = sb.get_current_url()
                 current_title = sb.get_title()
                 print(f"📝 当前URL: {current_url}, Title: {current_title}")
 
-                if "/a/billings" in current_url and "/login" not in current_url and "error=" not in current_url:
+                if "/dash/billings" in current_url and "/login" not in current_url and "error=" not in current_url:
                     login_ok = True
                     print("✅ Password 登录成功,当前已到达账单页")
                 else:
@@ -431,11 +435,9 @@ def main():
         outer_renew_selector = None
         countdown_text = None
         possible_selectors = [
-            'button:contains("Renew")',
+            'type:button("Renew free plan")',
             'button:contains("Renew free plan")',
-            'a:contains("Renew")',
-            '[class*="renew"]',
-            '[class*="Renew"]',
+            '[class*="btn btn-primary btn-sm"]',
         ]
 
         for selector in possible_selectors:
